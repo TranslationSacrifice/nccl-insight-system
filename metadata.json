@@ -1,0 +1,5 @@
+{
+  "name": "NCCL Insight Pro",
+  "description": "A high-performance real-time visualization dashboard for NVIDIA NCCL (Collective Communications Library) tests. It parses raw NCCL_DEBUG output into intuitive topology graphs, bandwidth charts, and collective operation timelines.",
+  "requestFramePermissions": []
+}
