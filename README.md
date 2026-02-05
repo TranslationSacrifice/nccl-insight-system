@@ -1,12 +1,4 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1avMRU9DkNIDWtxlgOuNDZp9oGF0gB_av
 
 ## Run Locally
 
@@ -15,6 +7,18 @@ View your app in AI Studio: https://ai.studio/apps/drive/1avMRU9DkNIDWtxlgOuNDZp
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Run the mock backend (this simulates NCCL logs/metrics and provides a WebSocket API):
+   `npm run server`
+
+3. Start the frontend in another terminal:
    `npm run dev`
+
+4. Open http://localhost:3000 in your browser.
+
+Notes:
+- The frontend connects to the backend WebSocket at `ws://localhost:4000` and consumes three message types: `session` (initial session/topology), `metric` (metric points), and `log` (NCCL log lines). Use the run/stop button to send start/stop control commands to the backend.
+- To capture real NCCL output instead of simulated data, run your benchmark on a Linux machine and point the backend to the stderr/stdout stream of nccl-tests. Recommended real command (enables verbose NCCL logging):
+
+  `NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=ALL mpirun -np 8 ./all_reduce_perf -b 1G -e 8G -f 2 -g 2`
+
+  The backend should spawn this process and stream parsed logs and metrics to connected frontends.

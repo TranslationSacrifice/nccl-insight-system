@@ -11,6 +11,7 @@ import {
 } from './types';
 import { generateMockLog, generateMockMetric } from './services/ncclSimulator';
 import { TopologyGraph } from './components/TopologyGraph';
+import { connectToBackend } from './services/backend';
 import { LogStream } from './components/LogStream';
 import { MetricsPanel } from './components/MetricsPanel';
 
@@ -33,37 +34,19 @@ const App: React.FC = () => {
   const [session, setSession] = useState<NCCLSession>({
     isRunning: false,
     algorithm: NCCLOp.ALLREDUCE,
-    numRanks: 8,
-    numNodes: 1,
+    numRanks: 0,
+    numNodes: 0,
     metrics: [],
     logs: [],
     topology: { nodes: [], edges: [] }
   });
 
   const [activeRank, setActiveRank] = useState<number>(0);
-  const intervalRef = useRef<number | null>(null);
-
-  // Initialize nodes for the topology
-  useEffect(() => {
-    const nodes: NCCLTopologyNode[] = Array.from({ length: 8 }).map((_, i) => ({
-      id: `rank-${i}`,
-      rank: i,
-      gpuId: i % 4,
-      host: `gpu-node-01`,
-      active: true
-    }));
-
-    const edges: NCCLTopologyEdge[] = nodes.map((node, i) => ({
-      source: node.rank.toString(),
-      target: ((node.rank + 1) % nodes.length).toString(),
-      bandwidth: 100,
-      type: NCCLTopologyType.RING
-    }));
-
-    setSession(prev => ({ ...prev, topology: { nodes, edges } }));
-  }, []);
+  const backendRef = useRef<any>(null);
 
   const toggleSession = () => {
+    const action = session.isRunning ? 'stop' : 'start';
+    backendRef.current?.sendControl(action);
     setSession(prev => ({
       ...prev,
       isRunning: !prev.isRunning,
@@ -72,42 +55,38 @@ const App: React.FC = () => {
     }));
   };
 
+  // Connect to backend WebSocket and receive session/metric/log events
   useEffect(() => {
-    if (session.isRunning) {
-      intervalRef.current = window.setInterval(() => {
-        // Update Metrics
-        setSession(prev => {
-          const newMetric = generateMockMetric(prev.metrics[prev.metrics.length - 1]);
-          const newMetrics = [...prev.metrics, newMetric].slice(-100);
-          
-          // Update Logs
-          const randomRank = Math.floor(Math.random() * 8);
-          const newLog: NCCLLogEntry = {
-            id: Math.random().toString(36).substr(2, 9),
-            timestamp: Date.now(),
-            rank: randomRank,
-            node: 'gpu-node-01',
-            message: generateMockLog(randomRank, prev.algorithm),
-            type: 'INFO'
-          };
-          
-          setActiveRank(randomRank);
-          
-          return {
-            ...prev,
-            metrics: newMetrics,
-            logs: [...prev.logs, newLog].slice(-500)
-          };
-        });
-      }, 500);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-
+    const client = connectToBackend(
+      (s) => {
+        setSession(prev => ({
+          ...prev,
+          algorithm: s.algorithm ?? prev.algorithm,
+          numRanks: s.numRanks ?? prev.numRanks,
+          numNodes: s.numNodes ?? prev.numNodes,
+          topology: s.topology ?? prev.topology,
+          isRunning: s.isRunning ?? false,
+          // 后端在 session 里如果带了 metrics/logs（离线回放模式），一次性更新前端
+          metrics: s.metrics ?? prev.metrics,
+          logs: s.logs ?? prev.logs
+        }));
+      },
+      (m) => {
+        setSession(prev => ({ ...prev, metrics: [...prev.metrics, m].slice(-100) }));
+      },
+      (l) => {
+        setActiveRank(l.rank);
+        setSession(prev => ({ ...prev, logs: [...prev.logs, l].slice(-500) }));
+      },
+      (upd) => {
+        setSession(prev => ({ ...prev, ...upd }));
+      }
+    );
+    backendRef.current = client;
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      client.close();
     };
-  }, [session.isRunning]);
+  }, []);
 
   return (
     <div className="h-screen w-screen flex flex-col p-4 gap-4 overflow-hidden">
