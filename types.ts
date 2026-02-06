@@ -31,6 +31,10 @@ export interface NCCLMetric {
   algBandwidth: number;
   busBandwidth: number;
   latency: number;
+  /** out-of-place 带宽/延迟；以下为 in-place 数据 */
+  algBandwidthInPlace?: number;
+  busBandwidthInPlace?: number;
+  latencyInPlace?: number;
 }
 
 export interface NCCLTopologyNode {

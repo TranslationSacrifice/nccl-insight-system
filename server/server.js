@@ -77,16 +77,18 @@ function parseNcclLogFile() {
     if (!line.trim()) return;
 
     // 先尝试识别是否是 nccl-tests 输出表格中的“速度行”
-    // 典型格式：
-    //   size   count   type  redop  root   time(us)  algbw(GB/s)  busbw(GB/s) ...
+    // 表头：size count type redop root | out-of-place: time algbw busbw #wrong | in-place: time algbw busbw #wrong
     const metricMatch = line.match(
-      /^\s*(\d+)\s+(\d+)\s+\w+\s+\w+\s+\-?\d+\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/
+      /^\s*(\d+)\s+(\d+)\s+\w+\s+\w+\s+\-?\d+\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+\d+\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+\d+/
     );
     if (metricMatch) {
       const size = parseInt(metricMatch[1], 10);
-      const latency = parseFloat(metricMatch[3]);       // time(us)
-      const algBandwidth = parseFloat(metricMatch[4]);  // out-of-place algbw
-      const busBandwidth = parseFloat(metricMatch[5]);  // out-of-place busbw
+      const latency = parseFloat(metricMatch[3]);           // out-of-place time(us)
+      const algBandwidth = parseFloat(metricMatch[4]);      // out-of-place algbw
+      const busBandwidth = parseFloat(metricMatch[5]);      // out-of-place busbw
+      const latencyInPlace = parseFloat(metricMatch[6]);    // in-place time(us)
+      const algBandwidthInPlace = parseFloat(metricMatch[7]);
+      const busBandwidthInPlace = parseFloat(metricMatch[8]);
 
       if (
         !Number.isNaN(size) &&
@@ -99,7 +101,10 @@ function parseNcclLogFile() {
           size,
           algBandwidth,
           busBandwidth,
-          latency
+          latency,
+          algBandwidthInPlace: Number.isNaN(algBandwidthInPlace) ? undefined : algBandwidthInPlace,
+          busBandwidthInPlace: Number.isNaN(busBandwidthInPlace) ? undefined : busBandwidthInPlace,
+          latencyInPlace: Number.isNaN(latencyInPlace) ? undefined : latencyInPlace
         });
       }
 
@@ -107,16 +112,22 @@ function parseNcclLogFile() {
       return;
     }
 
-    // 解析 rank，用于估计 numRanks，并在日志流里标记大致来源 rank
+    // 解析 rank：格式为 host:pid:thread [x] NCCL ...，方括号中的 x 即为 rank
     let rank = 0;
-    const mRank =
-      line.match(/rank\s+(\d+)/i) || line.match(/RANK\s+(\d+)/i);
+    const mRank = line.match(/\s\[(\d+)\]\s+NCCL/);
     if (mRank) {
       rank = parseInt(mRank[1], 10);
       if (!Number.isNaN(rank)) {
         rankSet.add(rank);
       } else {
         rank = 0;
+      }
+    } else {
+      // 兼容 #  Rank  0 这类行
+      const mRankAlt = line.match(/#\s*Rank\s+(\d+)/i);
+      if (mRankAlt) {
+        rank = parseInt(mRankAlt[1], 10);
+        if (!Number.isNaN(rank)) rankSet.add(rank);
       }
     }
 
