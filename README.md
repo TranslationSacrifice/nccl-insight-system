@@ -1,5 +1,6 @@
 ### NCCL 初始化分析可视化系统
 这是一个用于分析和可视化 NCCL（NVIDIA Collective Communications Library）初始化过程与性能数据的系统1.0版本。
+<img width="1733" height="915" alt="image" src="https://github.com/user-attachments/assets/26423ec7-02bb-4b35-b2e2-d339aeda9ef1" />
 
 #### 本地运行指南 (Run Locally)
 
