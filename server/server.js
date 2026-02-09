@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseTopologyFromLog } from './topologyParser.js';
 
 // 兼容 ESModule 环境下的 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -153,8 +154,18 @@ function parseNcclLogFile() {
     return a.size - b.size;
   });
 
+  // 使用新的拓扑解析器解析日志中的拓扑结构
+  let topology;
+  try {
+    topology = parseTopologyFromLog(content);
+  } catch (e) {
+    console.warn('[nccl-backend] Failed to parse topology from log:', e);
+    topology = buildRingTopology(numRanks);
+  }
+
   const session = {
     ...createBaseSession(numRanks),
+    topology,
     metrics,
     logs
   };
